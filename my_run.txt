@@ -1,0 +1,64 @@
+Ubuntu 上的完整运行流程
+
+1. 进入项目目录
+cd /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code
+
+2. 创建并激活虚拟环境（conda）
+conda create -n medsegx python=3.10 -y
+conda activate medsegx
+
+3. 安装 PyTorch 与 CUDA 依赖
+conda install pytorch==2.0.0 torchvision==0.15.0 pytorch-cuda=11.8 -c pytorch -c nvidia
+
+4. 安装 Python 依赖
+pip install -r requirements.txt
+
+5. 准备模型权重目录
+mkdir -p playground/SAM
+mkdir -p playground/MedSegX
+
+6. 下载并放置权重文件
+把下面两个文件放到对应目录：
+- SAM 基础权重：playground/SAM/sam_vit_b_01ec64.pth
+- MedSegX 权重：playground/MedSegX/medsegx_vit_b.pth
+
+7. 确认 5 个数据集目录存在
+ls /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/DDTI/eval/RealWorld/cross_site/US_ThyroidNodule/DDTI/inference
+ls /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/PKTN/eval/RealWorld/cross_site/US_ThyroidNodule/PKTN/inference
+ls /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/ThyroidXL/eval/RealWorld/cross_site/US_ThyroidNodule/ThyroidXL/inference
+ls /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/TN3K/eval/RealWorld/cross_site/US_ThyroidNodule/TN3K/inference
+ls /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/TN5K/eval/RealWorld/cross_site/US_ThyroidNodule/TN5K/inference
+
+每个 inference 目录下应包含：
+- npy_imgs/
+- npy_gts/
+
+8. 给推理脚本执行权限
+chmod +x scripts/thyroid-realworld-infer.sh
+
+9. 运行推理
+bash scripts/thyroid-realworld-infer.sh
+
+10. 单卡 0 号 GPU 运行
+DEVICE_IDS="0" bash scripts/thyroid-realworld-infer.sh
+
+11. 多卡运行示例
+DEVICE_IDS="0 1" bash scripts/thyroid-realworld-infer.sh
+
+12. 自定义 batch size 示例
+DEVICE_IDS="0" BATCH_SIZE="16" bash scripts/thyroid-realworld-infer.sh
+
+13. 结果输出目录
+ls playground/MedSegX/external
+
+结果文件示例：
+- playground/MedSegX/external/DDTI-RealWorld-site.md
+- playground/MedSegX/external/DDTI-RealWorld-site.csv
+- playground/MedSegX/external/PKTN-RealWorld-site.md
+- playground/MedSegX/external/PKTN-RealWorld-site.csv
+- playground/MedSegX/external/ThyroidXL-RealWorld-site.md
+- playground/MedSegX/external/ThyroidXL-RealWorld-site.csv
+- playground/MedSegX/external/TN3K-RealWorld-site.md
+- playground/MedSegX/external/TN3K-RealWorld-site.csv
+- playground/MedSegX/external/TN5K-RealWorld-site.md
+- playground/MedSegX/external/TN5K-RealWorld-site.csv
