@@ -15,6 +15,7 @@ DEVICE_IDS="${DEVICE_IDS:-0}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
 NUM_WORKERS="${NUM_WORKERS:-8}"
 METRICS="${METRICS:-dsc hd}"
+CI_OUTPUT="${CI_OUTPUT:-${PLAYGROUND_ROOT}/MedSegX/external/thyroid_ci_summary.csv}"
 
 DATASETS=(DDTI PKTN ThyroidXL TN3K TN5K)
 
@@ -56,3 +57,11 @@ for dataset in "${DATASETS[@]}"; do
 
     echo "[done] ${dataset} -> ${dst_md}"
 done
+
+echo "[run] calculating 95% confidence intervals"
+python "${REPO_ROOT}/scripts/calc_metric_ci.py" \
+    --input_dir "${RESULT_DIR}" \
+    --pattern "*-RealWorld-site.csv" \
+    --output "${CI_OUTPUT}"
+
+echo "[done] confidence intervals -> ${CI_OUTPUT}"

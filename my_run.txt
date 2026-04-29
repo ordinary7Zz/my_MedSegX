@@ -36,7 +36,7 @@ ls /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/TN5K/eval/RealWor
 8. 给推理脚本执行权限
 chmod +x scripts/thyroid-realworld-infer.sh
 
-9. 运行推理
+9. 运行推理并自动计算 DSC 和 HD95 的 95% 置信区间
 bash scripts/thyroid-realworld-infer.sh
 
 10. 单卡 0 号 GPU 运行
@@ -62,3 +62,4 @@ ls playground/MedSegX/external
 - playground/MedSegX/external/TN3K-RealWorld-site.csv
 - playground/MedSegX/external/TN5K-RealWorld-site.md
 - playground/MedSegX/external/TN5K-RealWorld-site.csv
+- playground/MedSegX/external/thyroid_ci_summary.csv
