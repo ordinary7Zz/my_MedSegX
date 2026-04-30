@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-MedSegX external inference without ground-truth masks.
+MedSegX external inference with full-image box prompts.
+Ground-truth masks are only used for evaluation.
 """
 
 import argparse
@@ -29,9 +30,10 @@ from data.datainfo import (
     organ_level_3_map,
     task_idx,
 )
+from utils.metric import SegmentMetrics
 
 
-parser = argparse.ArgumentParser("MedSegX external inference without masks", add_help=False)
+parser = argparse.ArgumentParser("MedSegX external full-image-box evaluation", add_help=False)
 # model
 parser.add_argument("--checkpoint", type=str, default="./playground/SAM",
                     help="path to SAM checkpoint folder")
@@ -45,42 +47,35 @@ parser.add_argument("--embedding_dim", type=int, default=16)
 parser.add_argument("--expert_num", type=int, default=4)
 # data
 parser.add_argument("--input_dir", type=str, required=True,
-                    help="path to the inference folder containing npy_imgs")
+                    help="path to the inference folder containing npy_imgs and npy_gts")
 parser.add_argument("--task_name", type=str, required=True,
                     help="task name in modal_organ format, e.g. US_ThyroidNodule")
 parser.add_argument("--output_dir", type=str, required=True,
-                    help="directory to save predictions")
+                    help="directory to save predictions and evaluation")
+parser.add_argument("--metric", type=str, default=["dsc", "hd"], nargs='+',
+                    help="evaluation metrics (e.g dsc, hd)")
 # infer
 parser.add_argument("--device", type=str, default="cuda:0")
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--num_workers", type=int, default=8)
 
 
-class TaskImageOnlyDataset(Dataset):
+class TaskImageEvalDataset(Dataset):
     def __init__(self, input_dir, task_name):
         self.input_dir = input_dir
         self.task_name = task_name
         self.img_dir = join(input_dir, "npy_imgs")
+        self.gt_dir = join(input_dir, "npy_gts")
         files = sorted(os.listdir(self.img_dir))
         self.file_names = [join(self.img_dir, f) for f in files if f.endswith(".npy")]
 
         modal = task_name.split('_')[0]
-        organ = ('').join(task_name.split('_')[1:])
-        organ = organ.rstrip('0123456789')
+        organ = ('').join(task_name.split('_')[1:]).rstrip('0123456789')
 
         self.modal = modal_map[modal_dict[modal]]
-        for k, v in organ_level_1_dict.items():
-            if organ in v:
-                organ_level_1 = organ_level_1_map[k]
-                break
-        for k, v in organ_level_2_dict.items():
-            if organ in v:
-                organ_level_2 = organ_level_2_map[k]
-                break
-        for k, v in organ_level_3_dict.items():
-            if organ in v:
-                organ_level_3 = organ_level_3_map[k]
-                break
+        organ_level_1 = next(organ_level_1_map[k] for k, v in organ_level_1_dict.items() if organ in v)
+        organ_level_2 = next(organ_level_2_map[k] for k, v in organ_level_2_dict.items() if organ in v)
+        organ_level_3 = next(organ_level_3_map[k] for k, v in organ_level_3_dict.items() if organ in v)
         organ_level_4 = task_idx[organ]
         self.organ = (organ_level_1, organ_level_2, organ_level_3, organ_level_4)
 
@@ -89,7 +84,10 @@ class TaskImageOnlyDataset(Dataset):
 
     def __getitem__(self, index):
         file_name = self.file_names[index]
+        gt_name = join(self.gt_dir, os.path.basename(file_name))
+
         img = np.load(file_name).transpose(2, 0, 1)
+        gt = np.load(gt_name)
         _, h, w = img.shape
         box = np.array([0, 0, w, h], dtype=np.float32)
 
@@ -99,9 +97,8 @@ class TaskImageOnlyDataset(Dataset):
             "modal": self.modal,
             "organ": self.organ,
             "name": file_name,
-            "original_size": torch.tensor([h, w]).long(),
         }
-        return data
+        return data, torch.tensor(gt[None, :, :]).long()
 
 
 def forward_with_iou(model, data):
@@ -152,18 +149,19 @@ def forward_with_iou(model, data):
     return mask_predictions, iou_predictions
 
 
-def run_inference(model, dataloader, img_size, img_transform, box_transform, output_dir, args):
+def run_evaluation(model, metric, dataloader, img_size, img_transform, box_transform, output_dir, args):
     model.eval()
     device = torch.device(args.device)
     pred_dir = join(output_dir, "npy_preds")
     os.makedirs(pred_dir, exist_ok=True)
 
+    result_total = {m: [] for m in args.metric}
     rows = []
+
     pbar = tqdm(dataloader)
-    pbar.set_description("Inferring")
+    pbar.set_description("Evaluating")
     with torch.no_grad():
-        for data in pbar:
-            original_size = tuple(int(v) for v in data["original_size"][0].tolist())
+        for data, label in pbar:
             if data["img"].shape[-1] != img_size:
                 data["box"] = box_transform.apply_boxes_torch(
                     data["box"].reshape(-1, 2, 2),
@@ -175,29 +173,53 @@ def run_inference(model, dataloader, img_size, img_transform, box_transform, out
             data["box"] = data["box"].to(device, non_blocking=True)
             data["modal"] = data["modal"].to(device, non_blocking=True)
             data["organ"] = tuple(v.to(device, non_blocking=True) for v in data["organ"])
+            label = label.to(device, non_blocking=True, dtype=torch.bool)
 
             mask_pred, iou_pred = forward_with_iou(model, data)
-            if mask_pred.shape[-2:] != original_size:
-                mask_pred = F.interpolate(mask_pred, size=original_size, mode="bilinear", antialias=True)
+            if mask_pred.shape[-2:] != label.shape[-2:]:
+                mask_pred = F.interpolate(mask_pred, size=label.shape[-2:], mode="bilinear", antialias=True)
 
             mask_prob = torch.sigmoid(mask_pred)
             best_idx = iou_pred.argmax(dim=1)
             batch_index = torch.arange(mask_prob.shape[0], device=device)
             chosen_prob = mask_prob[batch_index, best_idx]
-            chosen_mask = (chosen_prob > 0.5).to(torch.uint8).cpu().numpy()
+            chosen_mask = (chosen_prob > 0.5).bool().unsqueeze(1)
             best_score = iou_pred[batch_index, best_idx].cpu().numpy()
             best_idx_np = best_idx.cpu().numpy()
 
+            metric_batch = metric(chosen_mask, label)
+            metric_dict = {}
+            for m in args.metric:
+                result = metric_batch[m]
+                result_total[m].append(result)
+                metric_dict[m] = result.mean().item()
+
+            pbar.set_postfix(metric_dict)
+
+            chosen_mask_np = chosen_mask.squeeze(1).to(torch.uint8).cpu().numpy()
             for idx, name in enumerate(data["name"]):
                 base_name = os.path.basename(name)
                 out_path = join(pred_dir, base_name)
-                np.save(out_path, chosen_mask[idx])
-                rows.append({
+                np.save(out_path, chosen_mask_np[idx])
+                row = {
                     "File": name,
                     "PredMask": out_path,
                     "SelectedMaskIndex": int(best_idx_np[idx]),
                     "PredIoU": float(best_score[idx]),
-                })
+                }
+                for m in args.metric:
+                    row[m.upper()] = metric_batch[m][idx].item()
+                rows.append(row)
+
+    summary = {m.upper(): torch.cat(v).mean().item() for m, v in result_total.items()}
+    summary_df = pd.DataFrame([{"N_CASE": len(rows), **summary}])
+    summary_df.to_csv(join(output_dir, "summary.csv"), index=False)
+
+    with open(join(output_dir, "summary.md"), "w", encoding="utf-8") as f:
+        f.write("# external full-image-box evaluation\n\n")
+        metrics_text = ", ".join([f"{k} ({v:.4f})" for k, v in summary.items()])
+        f.write(f"- Mean: {metrics_text}\n")
+        f.write(f"- Cases: {len(rows)}\n")
 
     pd.DataFrame(rows).to_csv(join(output_dir, "predictions.csv"), index=False)
 
@@ -214,6 +236,8 @@ def main(args):
     else:
         raise NotImplementedError(f"Method {args.method} not implemented!")
 
+    seg_metric = SegmentMetrics(args.metric).to(device)
+
     if os.path.isfile(args.model_weight):
         print(f"load model from {args.model_weight}")
         checkpoint = torch.load(args.model_weight, map_location=device)
@@ -221,7 +245,7 @@ def main(args):
     else:
         raise FileNotFoundError(f"model weight {args.model_weight} not found!")
 
-    dataset = TaskImageOnlyDataset(args.input_dir, args.task_name)
+    dataset = TaskImageEvalDataset(args.input_dir, args.task_name)
     if len(dataset) == 0:
         raise RuntimeError(f"No .npy files found in {join(args.input_dir, 'npy_imgs')}")
 
@@ -238,8 +262,8 @@ def main(args):
     img_transform = Resize((img_size, img_size), antialias=True)
     box_transform = ResizeLongestSide(img_size)
 
-    run_inference(model, dataloader, img_size, img_transform, box_transform, args.output_dir, args)
-    print(f"save predictions to {args.output_dir}")
+    run_evaluation(model, seg_metric, dataloader, img_size, img_transform, box_transform, args.output_dir, args)
+    print(f"save predictions and evaluation to {args.output_dir}")
 
 
 if __name__ == "__main__":
