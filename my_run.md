@@ -48,6 +48,11 @@ python scripts/convert_image_to_npy.py \
     --images /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/finall_data/image \
     --masks /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/finall_data/mask \
     --output_root ./playground/FinalData/eval/RealWorld/cross_site/US_ThyroidNodule/FinalData/inference
+
+python scripts/convert_image_to_npy.py \
+    --images /mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/image \
+    --masks /mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/mask \
+    --output_root ./playground/Augtrain/eval/RealWorld/cross_site/US_ThyroidNodule/Augtrain/inference
 ```
 
 转换完成后会得到：

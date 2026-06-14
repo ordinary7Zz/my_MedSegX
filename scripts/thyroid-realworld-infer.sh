@@ -17,7 +17,7 @@ NUM_WORKERS="${NUM_WORKERS:-8}"
 METRICS="${METRICS:-dsc hd}"
 CI_OUTPUT="${CI_OUTPUT:-${PLAYGROUND_ROOT}/MedSegX/external/thyroid_ci_summary.csv}"
 
-DATASETS=(finall_data DDTI PKTN ThyroidXL TN3K TN5K)
+DATASETS=(FinalData Augtrain DDTI PKTN ThyroidXL TN3K TN5K)
 
 read -r -a DEVICE_ID_ARR <<< "${DEVICE_IDS}"
 read -r -a METRIC_ARR <<< "${METRICS}"
