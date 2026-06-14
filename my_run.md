@@ -39,7 +39,12 @@ mkdir -p playground/MedSegX
 - SAM 基础权重：`playground/SAM/sam_vit_b_01ec64.pth`
 - MedSegX 权重：`playground/MedSegX/medsegx_vit_b.pth`
 
-## 7. 如果原始数据还是 JPG / PNG，先转换成 NPY
+## 7. 相关脚本功能说明
+
+- `scripts/convert_image_to_npy.py`：把原始图片和 mask 批量转换成 `.npy`，并自动生成 MedSegX 需要的 `npy_imgs/` 和 `npy_gts/` 目录结构。它支持单文件转换，也支持 `--images` + `--masks` 的配对批量转换。
+- `scripts/thyroid-realworld-infer.sh`：批量运行甲状腺 RealWorld 外部评估，依次检查各数据集的 `inference/npy_imgs/` 和 `inference/npy_gts/`，再调用 `evaluate_external.py` 做推理并汇总结果与 95% 置信区间。
+
+## 8. 如果原始数据还是 JPG / PNG，先转换成 NPY
 
 如果你现在手里的原始数据是图片文件和 mask 文件，可以先用仓库里的转换脚本批量生成 MedSegX 需要的目录结构：
 
