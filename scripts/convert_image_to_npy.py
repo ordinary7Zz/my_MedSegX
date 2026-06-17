@@ -4,11 +4,15 @@
 Single-file / single-directory mode:
   python scripts/convert_image_to_npy.py --input /path/to/image_or_dir --output /path/to/save
 
+Resize all inputs before saving:
+  python scripts/convert_image_to_npy.py --input /path/to/image_dir --output /path/to/save --size 512 512
+
 Paired image+mask directory mode for MedSegX:
   python scripts/convert_image_to_npy.py \
       --images /path/to/images \
       --masks /path/to/masks \
-      --output_root /path/to/inference
+      --output_root /path/to/inference \
+      --size 512 512
 
 This creates:
   /path/to/inference/npy_imgs/
@@ -25,6 +29,7 @@ from PIL import Image
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+RESAMPLE = getattr(Image, "Resampling", Image)
 
 
 def load_as_numpy(path: Path, is_mask: bool = False) -> np.ndarray:
@@ -44,8 +49,27 @@ def load_as_numpy(path: Path, is_mask: bool = False) -> np.ndarray:
     raise ValueError(f"Unsupported file type: {path}")
 
 
-def save_npy(input_path: Path, output_path: Path, is_mask: bool = False) -> None:
+def resize_array(arr: np.ndarray, size: tuple[int, int], is_mask: bool = False) -> np.ndarray:
+    """Resize an array to (width, height) using PIL."""
+    if arr.ndim == 3 and arr.shape[0] in {1, 3, 4} and arr.shape[2] not in {1, 3, 4}:
+        arr = np.transpose(arr, (1, 2, 0))
+
+    if arr.ndim == 3 and arr.shape[2] == 1:
+        arr = np.squeeze(arr, axis=2)
+
+    if arr.ndim not in {2, 3}:
+        raise ValueError(f"Unsupported array shape for resizing: {arr.shape}")
+
+    image = Image.fromarray(arr)
+    resample = RESAMPLE.NEAREST if is_mask else RESAMPLE.BILINEAR
+    resized = image.resize(size, resample=resample)
+    return np.array(resized)
+
+
+def save_npy(input_path: Path, output_path: Path, is_mask: bool = False, size: tuple[int, int] | None = None) -> None:
     arr = load_as_numpy(input_path, is_mask=is_mask)
+    if size is not None:
+        arr = resize_array(arr, size, is_mask=is_mask)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     np.save(output_path, arr)
 
@@ -82,6 +106,13 @@ def parse_args() -> argparse.Namespace:
         "--output",
         help="Output .npy file path or output directory for single mode.",
     )
+    parser.add_argument(
+        "--size",
+        nargs=2,
+        type=int,
+        metavar=("WIDTH", "HEIGHT"),
+        help="Resize inputs to this size before saving.",
+    )
 
     parser.add_argument("--images", help="Image directory for paired mode.")
     parser.add_argument("--masks", help="Mask directory for paired mode.")
@@ -92,11 +123,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_single_mode(input_path: Path, output_path: Path) -> None:
+def run_single_mode(input_path: Path, output_path: Path, size: tuple[int, int] | None = None) -> None:
     if input_path.is_file():
         if output_path.suffix.lower() != ".npy":
             output_path = output_path.with_suffix(".npy")
-        save_npy(input_path, output_path)
+        save_npy(input_path, output_path, size=size)
         print(f"saved: {output_path}")
         return
 
@@ -104,14 +135,14 @@ def run_single_mode(input_path: Path, output_path: Path) -> None:
         output_path.mkdir(parents=True, exist_ok=True)
         for file_path in iter_input_files(input_path):
             out_file = output_path / f"{file_path.stem}.npy"
-            save_npy(file_path, out_file)
+            save_npy(file_path, out_file, size=size)
             print(f"saved: {out_file}")
         return
 
     raise FileNotFoundError(f"Input path not found: {input_path}")
 
 
-def run_paired_mode(images_dir: Path, masks_dir: Path, output_root: Path) -> None:
+def run_paired_mode(images_dir: Path, masks_dir: Path, output_root: Path, size: tuple[int, int] | None = None) -> None:
     img_map = build_stem_map(images_dir)
     mask_map = build_stem_map(masks_dir)
 
@@ -135,25 +166,26 @@ def run_paired_mode(images_dir: Path, masks_dir: Path, output_root: Path) -> Non
         mask_path = mask_map[stem]
         img_out = npy_img_dir / f"{stem}.npy"
         mask_out = npy_gt_dir / f"{stem}.npy"
-        save_npy(img_path, img_out, is_mask=False)
-        save_npy(mask_path, mask_out, is_mask=True)
+        save_npy(img_path, img_out, is_mask=False, size=size)
+        save_npy(mask_path, mask_out, is_mask=True, size=size)
         print(f"saved: {img_out}")
         print(f"saved: {mask_out}")
 
 
 def main() -> None:
     args = parse_args()
+    size = tuple(args.size) if args.size else None
 
     paired_mode = args.images or args.masks or args.output_root
     if paired_mode:
         if not (args.images and args.masks and args.output_root):
             raise SystemExit("paired mode requires --images, --masks, and --output_root")
-        run_paired_mode(Path(args.images), Path(args.masks), Path(args.output_root))
+        run_paired_mode(Path(args.images), Path(args.masks), Path(args.output_root), size=size)
         return
 
     if not (args.input and args.output):
         raise SystemExit("single mode requires --input and --output")
-    run_single_mode(Path(args.input), Path(args.output))
+    run_single_mode(Path(args.input), Path(args.output), size=size)
 
 
 if __name__ == "__main__":
