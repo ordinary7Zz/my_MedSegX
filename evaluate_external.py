@@ -77,8 +77,8 @@ def evaluate(model, metric, dataloader, img_size, img_transform, box_transform,
 
             mask_pred = model(data)
 
-            if mask_pred.shape[-1] != label.shape[-1]:
-                mask_pred = F.interpolate(mask_pred, size=label.shape[-1], mode="bilinear", antialias=True)
+            if mask_pred.shape[-2:] != label.shape[-2:]:
+                mask_pred = F.interpolate(mask_pred, size=label.shape[-2:], mode="bilinear", antialias=True)
             mask_prob = torch.sigmoid(mask_pred)
             mask = (mask_prob > 0.5).bool()
 
