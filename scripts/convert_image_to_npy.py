@@ -38,7 +38,8 @@ def load_as_numpy(path: Path, is_mask: bool = False) -> np.ndarray:
     if suffix in IMAGE_EXTS:
         img = Image.open(path)
         if is_mask:
-            return np.array(img.convert("L"))
+            mask = np.array(img.convert("L"))
+            return (mask > 0).astype(np.uint8)
         if img.mode in {"1", "L", "I;16", "I", "F"}:
             return np.array(img.convert("RGB"))
         return np.array(img.convert("RGB"))
