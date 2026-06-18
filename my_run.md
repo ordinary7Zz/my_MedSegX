@@ -46,18 +46,20 @@ mkdir -p playground/MedSegX
 
 ## 8. 如果原始数据还是 JPG / PNG，先转换成 NPY
 
-如果你现在手里的原始数据是图片文件和 mask 文件，可以先用仓库里的转换脚本批量生成 MedSegX 需要的目录结构：
+如果你现在手里的原始数据是图片文件和 mask 文件，可以先用仓库里的转换脚本批量生成 MedSegX 需要的目录结构，并统一 resize 到 `224 224`：
 
 ```bash
 python scripts/convert_image_to_npy.py \
     --images /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/finall_data/image \
     --masks /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/finall_data/mask \
-    --output_root ./playground/FinalData/eval/RealWorld/cross_site/US_ThyroidNodule/FinalData/inference
+    --output_root ./playground/FinalData/eval/RealWorld/cross_site/US_ThyroidNodule/FinalData/inference \
+    --size 224 224
 
 python scripts/convert_image_to_npy.py \
     --images /mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/image \
     --masks /mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/mask \
-    --output_root ./playground/Augtrain/eval/RealWorld/cross_site/US_ThyroidNodule/Augtrain/inference
+    --output_root ./playground/Augtrain/eval/RealWorld/cross_site/US_ThyroidNodule/Augtrain/inference \
+    --size 224 224
 ```
 
 转换完成后会得到：
