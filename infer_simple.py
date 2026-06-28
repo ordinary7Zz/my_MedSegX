@@ -77,12 +77,12 @@ def infer_single(model, image_np: np.ndarray, modal: int, organ: tuple,
     img_resize = Resize((img_size, img_size), antialias=True)
     img_tensor = img_resize(img_tensor.unsqueeze(0))  # (1, 3, img_size, img_size)
 
-    # --- SAM preprocess ---
-    img_tensor = model.sam.preprocess(img_tensor)
-
     # --- 移到设备 ---
     img_tensor = img_tensor.to(device)
     box = box.to(device)
+
+    # --- SAM preprocess ---
+    img_tensor = model.sam.preprocess(img_tensor)
 
     # --- Prompt encoder ---
     sparse_emb, dense_emb = model.sam.prompt_encoder(

@@ -172,11 +172,11 @@ python infer_simple.py \
 
 # 甲状腺结节推理
 python infer_simple.py \
-    --input_dir /path/to/nodule/test_images \
-    --output_dir /path/to/output/nodule_masks \
+    --input_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/sample/images \
+    --output_dir ./my_infer_output/nodule_masks \
     --task_name US_ThyroidNodule \
     --checkpoint ./playground/SAM \
-    --model_weight ./playground/MedSegX/finetune/cross_site/US_ThyroidNodule/NoduleData/model_best.pth \
+    --model_weight ./playground/MedSegX/medsegx_vit_b.pth \
     --device cuda:0
 ```
 
