@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 from torch.nn.modules.loss import _Loss
 from monai.losses.dice import DiceLoss

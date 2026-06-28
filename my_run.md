@@ -104,11 +104,11 @@ playground/NoduleData/eval/RealWorld/cross_site/US_ThyroidNodule/NoduleData/
 python finetune.py \
     --checkpoint ./playground/SAM \
     --model_type vit_b \
-    --data_path ./playground/GlndData/eval/RealWorld \
+    --data_path ./playground/TG_Video/eval/RealWorld \
     --shift_type cross_site \
     --resume ./playground/MedSegX/medsegx_vit_b.pth \
-    --num_epochs 30 \
-    --batch_size 64 \
+    --num_epochs 5 \
+    --batch_size 16 \
     --lr 5e-5 \
     --validation val \
     --use_amp
