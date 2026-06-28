@@ -91,6 +91,7 @@ def infer_single(model, image_np: np.ndarray, modal: int, organ: tuple,
 
     # --- Modal & Organ embedding ---
     batch_size = img_tensor.shape[0]
+    modal = torch.tensor([modal], dtype=torch.long, device=device)
     modal_index = model.sam.image_encoder.modal_index[modal]
     modal_embed = model.sam.image_encoder.modal_embed(modal_index)
 
