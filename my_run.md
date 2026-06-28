@@ -111,7 +111,8 @@ python finetune.py \
     --batch_size 16 \
     --lr 5e-5 \
     --validation val \
-    --use_amp
+    --use_amp \
+    --device_ids 0
 
 # 甲状腺结节微调
 python finetune.py \
