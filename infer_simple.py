@@ -96,6 +96,7 @@ def infer_single(model, image_np: np.ndarray, modal: int, organ: tuple,
 
     organ_1, organ_2, organ_3, organ_4 = organ
     organ_index_0 = torch.zeros(batch_size, dtype=torch.long, device=device)
+    organ_index_4 = torch.tensor([organ_4], dtype=torch.long, device=device)
     organ_embed = (
         model.sam.image_encoder.organ_embed[0](organ_index_0),
         model.sam.image_encoder.organ_embed[1](
@@ -104,7 +105,7 @@ def infer_single(model, image_np: np.ndarray, modal: int, organ: tuple,
             model.sam.image_encoder.organ_index_2[organ_2]),
         model.sam.image_encoder.organ_embed[3](
             model.sam.image_encoder.organ_index_3[organ_3]),
-        model.sam.image_encoder.organ_embed[4](organ_4),
+        model.sam.image_encoder.organ_embed[4](organ_index_4),
     )
 
     # --- Image encoder ---
