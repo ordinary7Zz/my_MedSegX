@@ -95,8 +95,12 @@ def infer_single(model, image_np: np.ndarray, modal: int, organ: tuple,
     modal_embed = model.sam.image_encoder.modal_embed(modal_index)
 
     organ_1, organ_2, organ_3, organ_4 = organ
+    # 转为 (1,) tensor，匹配 batch 模式下的 DataLoader collate 行为
+    organ_1 = torch.tensor([organ_1], dtype=torch.long, device=device)
+    organ_2 = torch.tensor([organ_2], dtype=torch.long, device=device)
+    organ_3 = torch.tensor([organ_3], dtype=torch.long, device=device)
+    organ_4 = torch.tensor([organ_4], dtype=torch.long, device=device)
     organ_index_0 = torch.zeros(batch_size, dtype=torch.long, device=device)
-    organ_index_4 = torch.tensor([organ_4], dtype=torch.long, device=device)
     organ_embed = (
         model.sam.image_encoder.organ_embed[0](organ_index_0),
         model.sam.image_encoder.organ_embed[1](
@@ -105,7 +109,7 @@ def infer_single(model, image_np: np.ndarray, modal: int, organ: tuple,
             model.sam.image_encoder.organ_index_2[organ_2]),
         model.sam.image_encoder.organ_embed[3](
             model.sam.image_encoder.organ_index_3[organ_3]),
-        model.sam.image_encoder.organ_embed[4](organ_index_4),
+        model.sam.image_encoder.organ_embed[4](organ_4),
     )
 
     # --- Image encoder ---
