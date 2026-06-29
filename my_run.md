@@ -107,7 +107,7 @@ python finetune.py \
     --data_path ./playground/TG_Video/eval/RealWorld \
     --shift_type cross_site \
     --resume ./playground/MedSegX/medsegx_vit_b.pth \
-    --num_epochs 5 \
+    --num_epochs 10 \
     --batch_size 16 \
     --lr 5e-5 \
     --validation val \

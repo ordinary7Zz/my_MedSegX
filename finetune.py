@@ -207,7 +207,7 @@ def main(args):
                         data["img"] = img_transform(data["img"])
                     data["img"] = data["img"].to(device, non_blocking=True)
                     data["box"] = data["box"].to(device, non_blocking=True)
-                    label = label.to(device, non_blocking=True)
+                    label = label.to(device, non_blocking=True, dtype=torch.float32)
 
                     if args.use_amp:
                         with torch.autocast(device_type="cuda", dtype=torch.float16):
@@ -257,7 +257,7 @@ def main(args):
                             data["img"] = img_transform(data["img"])
                         data["img"] = data["img"].to(device, non_blocking=True)
                         data["box"] = data["box"].to(device, non_blocking=True)
-                        label = label.to(device, non_blocking=True)
+                        label = label.to(device, non_blocking=True, dtype=torch.float32)
 
                         mask_pred = finetune_model(data)
                         if mask_pred.shape[-1] != label.shape[-1]:
