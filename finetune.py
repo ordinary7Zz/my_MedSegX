@@ -282,15 +282,18 @@ def main(args):
 
                 logger.info(f"Epoch [{epoch}] - LR: {lr}, Loss: {epoch_loss}, DSC: {epoch_dsc}")
 
+                ## save checkpoint for every epoch
+                checkpoint = {
+                    "model": finetune_model.module.save_parameters(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch": epoch,
+                }
+                torch.save(checkpoint, join(save_dir, f"checkpoint_epoch_{epoch}.pth"))
+
                 ## save the best model
                 if epoch_dsc > best_dsc:
                     best_dsc = epoch_dsc
                     best_epoch = epoch
-                    checkpoint = {
-                        "model": finetune_model.module.save_parameters(),
-                        "optimizer": optimizer.state_dict(),
-                        "epoch": epoch,
-                    }
                     torch.save(checkpoint, join(save_dir, "model_best.pth"))
 
                 # plot loss
