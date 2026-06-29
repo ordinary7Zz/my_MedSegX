@@ -28,6 +28,7 @@ mkdir -p playground/MedSegX
 | `scripts/finetune-site.sh` | 跨中心微调（cross_site）的快捷脚本 |
 | `scripts/finetune-task.sh` | 跨任务微调（cross_task）的快捷脚本 |
 | `scripts/thyroid-realworld-infer.sh` | 批量运行甲状腺 RealWorld 外部评估，并计算 95% 置信区间 |
+| `eval_simple.py` | **简单评估**：输入图像 + GT mask 目录，计算 DSC 和 HD95 |
 
 ---
 
@@ -183,7 +184,41 @@ python infer_simple.py \
 
 支持 PNG/JPG/BMP/TIFF 等常见格式，输出为二值 PNG 掩码。
 
-### 5.2 完整评估推理（需要 .npy + ground truth）
+### 5.2 评估（计算 DSC 和 HD95）
+
+```bash
+# 甲状腺腺体评估
+python eval_simple.py \
+    --image_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/test/image \
+    --mask_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/test/image \
+    --output_dir ./eval_output/finetune/TGVideo \
+    --task_name US_GlndThyroid \
+    --checkpoint ./playground/SAM \
+    --model_weight ./playground/MedSegX/finetune/cross_site/US_GlndThyroid/TG_Video/model_best.pth \
+    --device cuda:0
+
+# 甲状腺结节评估
+python eval_simple.py \
+    --image_dir /path/to/nodule/test/images \
+    --mask_dir /path/to/nodule/test/masks \
+    --output_dir ./eval_output/nodule \
+    --task_name US_ThyroidNodule \
+    --checkpoint ./playground/SAM \
+    --model_weight ./playground/MedSegX/finetune/cross_site/US_ThyroidNodule/NoduleData/model_best.pth \
+    --device cuda:0
+```
+
+图像和 GT mask 存放在不同目录，按文件名自动匹配。加 `--save_masks` 可额外保存预测掩码。
+
+输出示例：
+```
+样本数: 50
+Mean DSC:  0.8523 ± 0.0671
+Mean HD95: 3.2147 ± 1.8902
+```
+结果 CSV 保存在 `--output_dir/eval_results.csv`。
+
+### 5.3 完整评估推理（需要 .npy + ground truth）
 
 ```bash
 bash scripts/thyroid-realworld-infer.sh
