@@ -97,16 +97,44 @@ def find_gt_path(gt_dir: str, basename: str):
     return None
 
 
+def mask_to_box(mask: np.ndarray, perturb: int = 0, rng=None):
+    """Extract bounding box from a binary mask [x1, y1, x2, y2].
+
+    If perturb > 0, randomly expand each side by [0, perturb] pixels
+    (consistent with data/dataset_copy.py).
+    """
+    ys, xs = np.where(mask > 0)
+    if len(xs) == 0:
+        h, w = mask.shape[:2]
+        return np.array([0, 0, w, h], dtype=np.float32)
+    x_min, x_max = int(np.min(xs)), int(np.max(xs))
+    y_min, y_max = int(np.min(ys)), int(np.max(ys))
+    if perturb > 0:
+        r = rng or np.random
+        H, W = mask.shape[:2]
+        x_min = max(0, x_min - r.randint(0, perturb))
+        x_max = min(W, x_max + r.randint(0, perturb))
+        y_min = max(0, y_min - r.randint(0, perturb))
+        y_max = min(H, y_max + r.randint(0, perturb))
+    return np.array([x_min, y_min, x_max, y_max], dtype=np.float32)
+
+
 @torch.no_grad()
 def infer_single(model, image_np: np.ndarray, modal: int, organ: tuple,
-                 img_size: int, device: torch.device):
-    """Run inference on a single image, return (H, W) uint8 binary mask."""
+                 img_size: int, device: torch.device, box=None):
+    """Run inference on a single image, return (H, W) uint8 binary mask.
+
+    If *box* is None, use the full image as the box prompt.
+    Otherwise *box* should be [x1, y1, x2, y2] in original image coords.
+    """
     model.eval()
     h_orig, w_orig = image_np.shape[:2]
 
     # Image → tensor
     img_tensor = torch.from_numpy(image_np).permute(2, 0, 1)  # C,H,W
-    box = torch.tensor([[0, 0, w_orig, h_orig]], dtype=torch.float32)
+    if box is None:
+        box = np.array([0, 0, w_orig, h_orig], dtype=np.float32)
+    box = torch.tensor([box], dtype=torch.float32)
 
     # Transform box & image to model input size
     box_transform = ResizeLongestSide(img_size)
@@ -219,6 +247,17 @@ def main():
     parser.add_argument("--ci", type=float, default=95,
                         help="Confidence interval level (e.g. 95)")
 
+    # --- box prompt ---
+    parser.add_argument("--box_mode", type=str, default="full",
+                        choices=["full", "gt"],
+                        help="Box prompt mode: 'full' = full image box [0,0,W,H]; "
+                             "'gt' = bounding box extracted from GT mask (requires --gt_dir)")
+    parser.add_argument("--box_perturb", type=int, default=20,
+                        help="Max perturbation (pixels) added to GT box on each side. "
+                             "Only used when --box_mode gt. Set 0 for exact GT box.")
+    parser.add_argument("--box_seed", type=int, default=42,
+                        help="Random seed for GT box perturbation (reproducibility)")
+
     args = parser.parse_args()
 
     # ── Collect images ──
@@ -267,6 +306,16 @@ def main():
         print(f"GT directory provided: {args.gt_dir}")
         print("Will compute DSC + HD95 + CI95")
 
+    use_gt_box = (args.box_mode == "gt")
+    box_rng = None
+    if use_gt_box:
+        if args.gt_dir is None:
+            raise ValueError("--box_mode gt requires --gt_dir to be provided")
+        print(f"Box mode: GT-derived box (perturb={args.box_perturb}, seed={args.box_seed})")
+        box_rng = np.random.default_rng(args.box_seed)
+    else:
+        print("Box mode: full image box")
+
     # ── Inference loop ──
     dsc_list, hd95_list, results = [], [], []
     skipped = 0
@@ -276,8 +325,23 @@ def main():
         image_np = load_image(img_path)
         h, w = image_np.shape[:2]
 
+        # Load GT mask (used for both GT box prompt and metric evaluation)
+        gt_mask = None
+        if use_gt_box or compute_metrics:
+            basename = os.path.splitext(fname)[0]
+            gt_path = find_gt_path(args.gt_dir, basename)
+            if gt_path is None:
+                skipped += 1
+                continue
+            gt_mask = load_mask(gt_path, h, w)
+
+        # Determine box prompt
+        box = None
+        if use_gt_box:
+            box = mask_to_box(gt_mask, perturb=args.box_perturb, rng=box_rng)
+
         # Run model
-        pred_mask = infer_single(model, image_np, modal, organ, img_size, device)
+        pred_mask = infer_single(model, image_np, modal, organ, img_size, device, box=box)
 
         # Save predicted mask (optional)
         if args.output_dir:
@@ -287,12 +351,6 @@ def main():
 
         # Evaluate (optional)
         if compute_metrics:
-            basename = os.path.splitext(fname)[0]
-            gt_path = find_gt_path(args.gt_dir, basename)
-            if gt_path is None:
-                skipped += 1
-                continue
-            gt_mask = load_mask(gt_path, h, w)
             dsc = dice_coeff(pred_mask, gt_mask)
             hd = hd95(pred_mask, gt_mask)
             dsc_list.append(dsc)
@@ -313,6 +371,9 @@ def main():
     log_lines.append(f"Model type:   {args.model_type}")
     log_lines.append(f"Method:       {args.method}")
     log_lines.append(f"Device:       {args.device}")
+    log_lines.append(f"Box mode:     {args.box_mode}"
+                     + (f" (perturb={args.box_perturb}, seed={args.box_seed})"
+                        if use_gt_box else ""))
     log_lines.append(f"Total images: {len(img_files)}")
 
     evaluated = 0
