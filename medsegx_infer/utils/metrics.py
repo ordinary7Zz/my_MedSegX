@@ -48,24 +48,26 @@ def hd95(pred: np.ndarray, gt: np.ndarray) -> float:
     where d(A→B) is, for each point in A, the Euclidean distance to the
     nearest point in B.
 
-    Returns float('nan') when either mask is completely empty
-    (distance undefined).
+    Boundary cases:
+        - pred & gt both non-empty: normal calculation
+        - pred non-empty, gt empty (false positive): return 0.0
+        - pred empty, gt non-empty (false negative): return 0.0
+        - pred & gt both empty (true negative):     return 0.0
     """
     pred = pred.astype(bool)
     gt = gt.astype(bool)
 
-    if pred.sum() == 0 and gt.sum() == 0:
-        return 0.0
     if pred.sum() == 0 or gt.sum() == 0:
-        # One side empty, the other not → surface distance undefined
-        return float('nan')
+        # Any side empty → no surface distance to compute → 0.0
+        return 0.0
 
     # Surface points
     surf_pred = _surface_points(pred)
     surf_gt = _surface_points(gt)
 
     if surf_pred.shape[0] == 0 or surf_gt.shape[0] == 0:
-        return float('nan')
+        # Should not happen after the checks above, but keep as safeguard
+        return 0.0
 
     # For each point in surf_pred, min distance to surf_gt  (d_pred_to_gt)
     # For each point in surf_gt,  min distance to surf_pred (d_gt_to_pred)
