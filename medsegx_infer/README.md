@@ -64,11 +64,11 @@ python inference.py \
 
 ```bash
 python inference.py \
-    --input_dir    /path/to/nodule/test_images \
-    --gt_dir       /path/to/nodule/test_masks \
+    --input_dir    /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/test/images \
+    --gt_dir       /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/test/masks \
     --task_name    US_ThyroidNodule \
-    --checkpoint   /path/to/weights/SAM \
-    --model_weight /path/to/weights/medsegx_nodule.pth \
+    --checkpoint   /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/SAM \
+    --model_weight /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/MedSegX/finetune/cross_site/US_ThyroidNodule/NoduleData/model_best.pth \
     --log_file     ./logs/nodule.log \
     --device       cuda:0
 ```
