@@ -19,34 +19,25 @@ def dice_coeff(pred: np.ndarray, gt: np.ndarray) -> float:
     return (2.0 * intersection) / denom
 
 
-def _surface_points(mask: np.ndarray) -> np.ndarray:
-    """Extract surface (boundary) points of a binary mask.
-
-    Surface = foreground pixels that have at least one background
-    neighbour (4-connectivity).  Returns an (N, 2) array of (y, x) coords.
-    """
-    mask = mask.astype(bool)
-    if mask.sum() == 0:
-        return np.empty((0, 2), dtype=np.float64)
-
-    # erode by 1 pixel (4-connectivity) → boundary = foreground − eroded
-    from scipy.ndimage import binary_erosion
-    eroded = binary_erosion(mask, iterations=1)
-    boundary = mask & ~eroded
-    coords = np.argwhere(boundary)
-    return coords.astype(np.float64)
+def _hd95_one_sided(x: np.ndarray, y: np.ndarray) -> float:
+    """One-sided 95th-percentile distance: for each foreground pixel in x,
+    the Euclidean distance to the nearest foreground pixel in y."""
+    distances = distance_transform_edt(~y)
+    indexes = np.nonzero(x)
+    return float(np.percentile(distances[indexes], 95))
 
 
 def hd95(pred: np.ndarray, gt: np.ndarray) -> float:
     """95th-percentile Hausdorff Distance (in pixels).
 
-    Uses the symmetric surface-distance approach:
-        d_surface = max(
-            percentile_95(d(pred_surf → gt_surf)),
-            percentile_95(d(gt_surf  → pred_surf))
+    Uses the symmetric distance-transform approach over all foreground
+    pixels:
+        d = max(
+            percentile_95(d(pred_fg → gt_fg)),
+            percentile_95(d(gt_fg  → pred_fg))
         )
-    where d(A→B) is, for each point in A, the Euclidean distance to the
-    nearest point in B.
+    where d(A→B) is, for each foreground pixel in A, the Euclidean distance
+    to the nearest foreground pixel in B (computed via EDT).
 
     Boundary cases:
         - pred & gt both non-empty: normal calculation
@@ -58,34 +49,12 @@ def hd95(pred: np.ndarray, gt: np.ndarray) -> float:
     gt = gt.astype(bool)
 
     if pred.sum() == 0 or gt.sum() == 0:
-        # Any side empty → no surface distance to compute → 0.0
         return 0.0
 
-    # Surface points
-    surf_pred = _surface_points(pred)
-    surf_gt = _surface_points(gt)
+    d_pred_to_gt = _hd95_one_sided(pred, gt)
+    d_gt_to_pred = _hd95_one_sided(gt, pred)
 
-    if surf_pred.shape[0] == 0 or surf_gt.shape[0] == 0:
-        # Should not happen after the checks above, but keep as safeguard
-        return 0.0
-
-    # For each point in surf_pred, min distance to surf_gt  (d_pred_to_gt)
-    # For each point in surf_gt,  min distance to surf_pred (d_gt_to_pred)
-    #
-    # Use scipy cKDTree for efficiency.
-    from scipy.spatial import cKDTree
-    tree_gt = cKDTree(surf_gt)
-    tree_pred = cKDTree(surf_pred)
-
-    d_pred_to_gt, _ = tree_gt.query(surf_pred)
-    d_gt_to_pred, _ = tree_pred.query(surf_gt)
-
-    # Symmetric: take max of the two 95th-percentiles
-    # (consistent with the non-directed HD95 definition)
-    hd95_pred = np.percentile(d_pred_to_gt, 95)
-    hd95_gt = np.percentile(d_gt_to_pred, 95)
-
-    return max(hd95_pred, hd95_gt)
+    return float(max(d_pred_to_gt, d_gt_to_pred))
 
 
 def bootstrap_ci(values, n_boot=2000, ci=95, seed=42):
