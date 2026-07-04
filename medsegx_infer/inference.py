@@ -112,10 +112,14 @@ def mask_to_box(mask: np.ndarray, perturb: int = 0, rng=None):
     if perturb > 0:
         r = rng or np.random
         H, W = mask.shape[:2]
-        x_min = max(0, x_min - r.randint(0, perturb))
-        x_max = min(W, x_max + r.randint(0, perturb))
-        y_min = max(0, y_min - r.randint(0, perturb))
-        y_max = min(H, y_max + r.randint(0, perturb))
+        if hasattr(r, "integers"):
+            p = lambda: r.integers(0, perturb + 1)
+        else:
+            p = lambda: r.randint(0, perturb)
+        x_min = max(0, x_min - p())
+        x_max = min(W, x_max + p())
+        y_min = max(0, y_min - p())
+        y_max = min(H, y_max + p())
     return np.array([x_min, y_min, x_max, y_max], dtype=np.float32)
 
 
