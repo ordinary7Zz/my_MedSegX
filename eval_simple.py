@@ -79,25 +79,17 @@ def hd95(pred: np.ndarray, gt: np.ndarray) -> float:
     """计算 Hausdorff Distance 95th percentile（像素单位）。
 
     基于 scipy 距离变换实现，不依赖 monai。
-    约定：
-    - pred 与 gt 均为 (H, W) 二值数组；
-    - 两者都为空 → 0.0（完全重合）；
-    - GT 为空、pred 非空 → nan（无 GT，HD95 无意义）；
-    - pred 为空、GT 非空 → 图像对角线长度（缺失预测的最大惩罚）；
-    - 其余情况计算对称 HD95 = max(hd(pred→gt), hd(gt→pred))。
+    边界情况约定（与 medsegx_infer/utils/metrics.py 对齐）：
+    - pred 与 gt 均非空 → 正常计算对称 HD95 = max(hd(pred→gt), hd(gt→pred))；
+    - pred 非空、gt 为空（假阳性）→ 0.0；
+    - pred 为空、gt 非空（漏检/假阴性）→ 0.0；
+    - pred 与 gt 均为空（真阴性）→ 0.0。
     """
     pred_b = pred.astype(bool)
     gt_b = gt.astype(bool)
-    p_empty = not pred_b.any()
-    g_empty = not gt_b.any()
 
-    if p_empty and g_empty:
+    if not pred_b.any() or not gt_b.any():
         return 0.0
-    if g_empty:
-        return float('nan')
-    if p_empty:
-        h, w = pred_b.shape
-        return float(np.sqrt(h * h + w * w))
 
     hd1 = _hd95_one_sided(pred_b, gt_b)
     hd2 = _hd95_one_sided(gt_b, pred_b)
