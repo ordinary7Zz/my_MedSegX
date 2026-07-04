@@ -13,6 +13,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from scipy.ndimage import distance_transform_edt as edt
 from torchvision.transforms import Resize
 from tqdm import tqdm
 
@@ -63,42 +64,44 @@ def dice_coeff(pred: torch.Tensor, gt: torch.Tensor) -> float:
     return (2. * intersection / (pred.sum() + gt.sum() + 1e-8)).item()
 
 
-_hd95_err_logged = False
+def _hd95_one_sided(x: np.ndarray, y: np.ndarray) -> float:
+    """x 中每个前景点到 y 最近前景点的距离的 95 百分位。
+
+    edt(~y) 得到每个像素到 y 前景最近点的欧氏距离图；
+    取 x 前景处的距离值，求 95 百分位。
+    """
+    distances = edt(~y)
+    indexes = np.nonzero(x)
+    return float(np.percentile(distances[indexes], 95))
 
 
 def hd95(pred: np.ndarray, gt: np.ndarray) -> float:
     """计算 Hausdorff Distance 95th percentile（像素单位）。
 
+    基于 scipy 距离变换实现，不依赖 monai。
     约定：
     - pred 与 gt 均为 (H, W) 二值数组；
-    - 两者都为空（无前景）→ 0.0，表示完全重合；
-    - 仅一方为空 → nan，表示预测/标注缺失，无法定义有意义的距离；
-    - 其余情况交由 MONAI 计算。
+    - 两者都为空 → 0.0（完全重合）；
+    - GT 为空、pred 非空 → nan（无 GT，HD95 无意义）；
+    - pred 为空、GT 非空 → 图像对角线长度（缺失预测的最大惩罚）；
+    - 其余情况计算对称 HD95 = max(hd(pred→gt), hd(gt→pred))。
     """
     pred_b = pred.astype(bool)
     gt_b = gt.astype(bool)
     p_empty = not pred_b.any()
     g_empty = not gt_b.any()
+
     if p_empty and g_empty:
         return 0.0
-    if p_empty or g_empty:
+    if g_empty:
         return float('nan')
+    if p_empty:
+        h, w = pred_b.shape
+        return float(np.sqrt(h * h + w * w))
 
-    global _hd95_err_logged
-    try:
-        from utils.HausdorffDistance import HausdorffDistanceMetric
-        # 单通道二值 mask：通道 0 即前景，必须 include_background=True，
-        # 否则 ignore_background 会剔除该通道 → n_class=0 → 输出空 tensor → .item() 抛错。
-        metric = HausdorffDistanceMetric(include_background=True, percentile=95.)
-        pred_t = torch.from_numpy(pred_b)[None, None]
-        gt_t = torch.from_numpy(gt_b)[None, None]
-        hd = metric(pred_t, gt_t)
-        return float(hd.item())
-    except Exception as e:
-        if not _hd95_err_logged:
-            print(f"[hd95] 计算异常（后续同类异常将静默）: {type(e).__name__}: {e}")
-            _hd95_err_logged = True
-        return float('nan')
+    hd1 = _hd95_one_sided(pred_b, gt_b)
+    hd2 = _hd95_one_sided(gt_b, pred_b)
+    return float(max(hd1, hd2))
 
 
 @torch.no_grad()
