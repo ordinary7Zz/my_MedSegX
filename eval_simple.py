@@ -63,16 +63,41 @@ def dice_coeff(pred: torch.Tensor, gt: torch.Tensor) -> float:
     return (2. * intersection / (pred.sum() + gt.sum() + 1e-8)).item()
 
 
+_hd95_err_logged = False
+
+
 def hd95(pred: np.ndarray, gt: np.ndarray) -> float:
-    """计算 Hausdorff Distance 95th percentile (mm)"""
+    """计算 Hausdorff Distance 95th percentile（像素单位）。
+
+    约定：
+    - pred 与 gt 均为 (H, W) 二值数组；
+    - 两者都为空（无前景）→ 0.0，表示完全重合；
+    - 仅一方为空 → nan，表示预测/标注缺失，无法定义有意义的距离；
+    - 其余情况交由 MONAI 计算。
+    """
+    pred_b = pred.astype(bool)
+    gt_b = gt.astype(bool)
+    p_empty = not pred_b.any()
+    g_empty = not gt_b.any()
+    if p_empty and g_empty:
+        return 0.0
+    if p_empty or g_empty:
+        return float('nan')
+
+    global _hd95_err_logged
     try:
         from utils.HausdorffDistance import HausdorffDistanceMetric
-        metric = HausdorffDistanceMetric(percentile=95.)
-        pred_t = torch.from_numpy(pred).bool()[None, None]
-        gt_t = torch.from_numpy(gt).bool()[None, None]
+        # 单通道二值 mask：通道 0 即前景，必须 include_background=True，
+        # 否则 ignore_background 会剔除该通道 → n_class=0 → 输出空 tensor → .item() 抛错。
+        metric = HausdorffDistanceMetric(include_background=True, percentile=95.)
+        pred_t = torch.from_numpy(pred_b)[None, None]
+        gt_t = torch.from_numpy(gt_b)[None, None]
         hd = metric(pred_t, gt_t)
-        return hd.item()
-    except Exception:
+        return float(hd.item())
+    except Exception as e:
+        if not _hd95_err_logged:
+            print(f"[hd95] 计算异常（后续同类异常将静默）: {type(e).__name__}: {e}")
+            _hd95_err_logged = True
         return float('nan')
 
 
@@ -222,12 +247,19 @@ def main():
     if dsc_list:
         mean_dsc = np.mean(dsc_list)
         std_dsc = np.std(dsc_list)
-        mean_hd = np.nanmean(hd95_list)
-        std_hd = np.nanstd(hd95_list)
+        hd_arr = np.asarray(hd95_list, dtype=float)
+        hd_valid = hd_arr[~np.isnan(hd_arr)]
+        if hd_valid.size > 0:
+            mean_hd = float(np.mean(hd_valid))
+            std_hd = float(np.std(hd_valid))
+            hd_str = f"{mean_hd:.4f} ± {std_hd:.4f} (有效 {hd_valid.size}/{len(hd_arr)})"
+        else:
+            mean_hd, std_hd = float('nan'), float('nan')
+            hd_str = "nan（无有效样本，请检查 pred/gt 是否全为空或 HD95 计算异常）"
         print(f"\n===== 评估结果 =====")
         print(f"样本数: {len(dsc_list)}")
         print(f"Mean DSC:  {mean_dsc:.4f} ± {std_dsc:.4f}")
-        print(f"Mean HD95: {mean_hd:.4f} ± {std_hd:.4f}")
+        print(f"Mean HD95: {hd_str}")
 
         # 保存 CSV
         import csv

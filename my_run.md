@@ -207,6 +207,15 @@ python eval_simple.py \
     --checkpoint ./playground/SAM \
     --model_weight ./playground/MedSegX/finetune/cross_site/US_ThyroidNodule/NoduleData/model_best.pth \
     --device cuda:0
+
+python eval_simple.py \
+    --image_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/images \
+    --mask_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/masks \
+    --output_dir ./eval_output/nodule \
+    --task_name US_ThyroidNodule \
+    --checkpoint ./playground/SAM \
+    --model_weight ./playground/MedSegX/finetune/cross_site/US_ThyroidNodule/NoduleData/model_best.pth \
+    --device cuda:0
 ```
 
 图像和 GT mask 存放在不同目录，按文件名自动匹配。加 `--save_masks` 可额外保存预测掩码。
