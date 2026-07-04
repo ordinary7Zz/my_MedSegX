@@ -58,9 +58,9 @@ python scripts/convert_image_to_npy.py \
 ```bash
 # 推理数据
 python scripts/convert_image_to_npy.py \
-    --images /path/to/nodule/images \
-    --masks /path/to/nodule/masks \
-    --output_root ./playground/NoduleData/eval/RealWorld/cross_site/US_ThyroidNodule/NoduleData/inference \
+    --images /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/train/images \
+    --masks /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/train/masks \
+    --output_root ./playground/NoduleData/eval/RealWorld/cross_site/US_ThyroidNodule/NoduleData/finetune \
     --size 224 224
 ```
 
@@ -123,10 +123,11 @@ python finetune.py \
     --shift_type cross_site \
     --resume ./playground/MedSegX/medsegx_vit_b.pth \
     --num_epochs 30 \
-    --batch_size 64 \
+    --batch_size 16 \
     --lr 5e-5 \
     --validation val \
-    --use_amp
+    --use_amp \
+    --device_ids 0
 ```
 
 | 参数 | 说明 |
@@ -190,17 +191,17 @@ python infer_simple.py \
 # 甲状腺腺体评估
 python eval_simple.py \
     --image_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/test/image \
-    --mask_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/test/image \
+    --mask_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/test/mask \
     --output_dir ./eval_output/finetune/TGVideo \
     --task_name US_GlndThyroid \
     --checkpoint ./playground/SAM \
-    --model_weight ./playground/MedSegX/finetune/cross_site/US_GlndThyroid/TG_Video/model_best.pth \
+    --model_weight ./playground/MedSegX/finetune/cross_site/US_GlndThyroid/TG_Video/checkpoint_epoch_29.pth \
     --device cuda:0
 
 # 甲状腺结节评估
 python eval_simple.py \
-    --image_dir /path/to/nodule/test/images \
-    --mask_dir /path/to/nodule/test/masks \
+    --image_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/test/images \
+    --mask_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/test/masks \
     --output_dir ./eval_output/nodule \
     --task_name US_ThyroidNodule \
     --checkpoint ./playground/SAM \
