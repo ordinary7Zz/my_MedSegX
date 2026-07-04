@@ -64,8 +64,8 @@ python inference.py \
 
 ```bash
 python inference.py \
-    --input_dir    /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/test/images \
-    --gt_dir       /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/Superimposed_experiment/dataset_4/test/masks \
+    --input_dir    /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/images \
+    --gt_dir       /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/masks \
     --task_name    US_ThyroidNodule \
     --checkpoint   /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/SAM \
     --model_weight /mnt/wangbd8/workspace/ThyroidAgent/MedSegX-code/playground/MedSegX/finetune/cross_site/US_ThyroidNodule/NoduleData/model_best.pth \

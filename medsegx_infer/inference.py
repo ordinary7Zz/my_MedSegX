@@ -315,6 +315,11 @@ def main():
     log_lines.append(f"Device:       {args.device}")
     log_lines.append(f"Total images: {len(img_files)}")
 
+    evaluated = 0
+    mean_dsc = mean_hd = float('nan')
+    dsc_lo = dsc_hi = float('nan')
+    hd_lo = hd_hi = float('nan')
+
     if compute_metrics:
         evaluated = len(dsc_list)
         log_lines.append(f"Evaluated:    {evaluated}")
@@ -324,42 +329,65 @@ def main():
             dsc_arr = np.array(dsc_list, dtype=float)
             hd95_arr = np.array(hd95_list, dtype=float)
 
-            mean_dsc, dsc_lo, dsc_hi = bootstrap_ci(
-                dsc_arr, n_boot=args.n_boot, ci=args.ci)
-            mean_hd, hd_lo, hd_hi = bootstrap_ci(
-                hd95_arr, n_boot=args.n_boot, ci=args.ci)
+            # Compute bootstrap CI (with fallback to simple mean)
+            try:
+                mean_dsc, dsc_lo, dsc_hi = bootstrap_ci(
+                    dsc_arr, n_boot=args.n_boot, ci=args.ci)
+                mean_hd, hd_lo, hd_hi = bootstrap_ci(
+                    hd95_arr, n_boot=args.n_boot, ci=args.ci)
+            except Exception as e:
+                print(f"[Warning] bootstrap_ci failed: {e}")
+                mean_dsc = float(np.nanmean(dsc_arr))
+                mean_hd = float(np.nanmean(hd95_arr))
+                dsc_lo = dsc_hi = mean_dsc
+                hd_lo = hd_hi = mean_hd
 
-            log_lines.append("")
-            log_lines.append("-" * 60)
-            log_lines.append("Metrics Summary")
-            log_lines.append("-" * 60)
-            log_lines.append(f"  DSC  : {mean_dsc:.6f}  "
-                             f"[{args.ci:.0f}% CI: {dsc_lo:.6f} – {dsc_hi:.6f}]")
-            log_lines.append(f"  HD95 : {mean_hd:.6f}  "
-                             f"[{args.ci:.0f}% CI: {hd_lo:.6f} – {hd_hi:.6f}]")
-            log_lines.append(f"  DSC  std: {dsc_arr.std():.6f}")
-            log_lines.append(f"  HD95 std: {np.nanstd(hd95_arr):.6f}")
+            # Per-sample results first
             log_lines.append("")
             log_lines.append("Per-sample results:")
             log_lines.append(f"  {'File':<40s} {'DSC':>10s} {'HD95':>10s}")
             log_lines.append(f"  {'----':<40s} {'---':>10s} {'----':>10s}")
             for fname, dsc, hd in results:
                 log_lines.append(f"  {fname:<40s} {dsc:>10.6f} {hd:>10.6f}")
+
+            # Metrics summary at the end (most visible)
+            log_lines.append("")
+            log_lines.append("=" * 60)
+            log_lines.append("Metrics Summary (Mean ± std with CI)")
+            log_lines.append("=" * 60)
+            log_lines.append(f"  DSC  : {mean_dsc:.6f}  "
+                             f"[{args.ci:.0f}% CI: {dsc_lo:.6f} – {dsc_hi:.6f}]")
+            log_lines.append(f"  HD95 : {mean_hd:.6f}  "
+                             f"[{args.ci:.0f}% CI: {hd_lo:.6f} – {hd_hi:.6f}]")
+            log_lines.append(f"  DSC  std: {dsc_arr.std():.6f}")
+            log_lines.append(f"  HD95 std: {np.nanstd(hd95_arr):.6f}")
+            log_lines.append(f"  N samples: {evaluated}")
+            log_lines.append("=" * 60)
         else:
             log_lines.append("No valid GT matches found — metrics not computed.")
+            log_lines.append("=" * 60)
     else:
         log_lines.append("GT directory not provided — metrics not computed.")
-
-    log_lines.append("=" * 60)
+        log_lines.append("=" * 60)
 
     # Write log
     os.makedirs(os.path.dirname(os.path.abspath(args.log_file)), exist_ok=True)
     with open(args.log_file, 'w', encoding='utf-8') as f:
         f.write('\n'.join(log_lines) + '\n')
 
-    # Also print summary to console
+    # Print full log
     for line in log_lines:
         print(line)
+
+    # Print prominent final summary (impossible to miss)
+    if compute_metrics and evaluated > 0:
+        print()
+        print("#" * 60)
+        print("#  FINAL RESULTS")
+        print("#" * 60)
+        print(f"#  DSC  : {mean_dsc:.6f}  [{args.ci:.0f}% CI: {dsc_lo:.6f} - {dsc_hi:.6f}]")
+        print(f"#  HD95 : {mean_hd:.6f}  [{args.ci:.0f}% CI: {hd_lo:.6f} - {hd_hi:.6f}]")
+        print("#" * 60)
 
     print(f"\nLog saved to: {args.log_file}")
 
